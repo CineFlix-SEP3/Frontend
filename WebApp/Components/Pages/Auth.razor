@@ -1,0 +1,27 @@
+@page "/"
+@rendermode InteractiveServer
+
+<link href="auth.css" rel="stylesheet" />
+
+<main class="auth-container">
+    <div class="auth-box">
+        @if (_showLogin)
+        {
+            <Login OnSwitch="SwitchForm" />
+        }
+        else
+        {
+            <Register OnSwitch="SwitchForm" />
+        }
+    </div>
+</main>
+
+@code {
+    private bool _showLogin = true;
+
+    private void SwitchForm()
+    {
+        Console.WriteLine("SwitchForm called!");
+        _showLogin = !_showLogin;
+    }
+}
