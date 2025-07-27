@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/bibek/Desktop/Frontend/WebApp/WebApp.csproj",
+      "projectUniqueName": "/Users/bibek/VIA/ReExam Sep3/FrontEnd/WebApp/WebApp.csproj",
       "projectName": "WebApp",
-      "projectPath": "/Users/bibek/Desktop/Frontend/WebApp/WebApp.csproj",
+      "projectPath": "/Users/bibek/VIA/ReExam Sep3/FrontEnd/WebApp/WebApp.csproj",
       "packagesPath": "/Users/bibek/.nuget/packages/",
-      "outputPath": "/Users/bibek/Desktop/Frontend/WebApp/obj/",
+      "outputPath": "/Users/bibek/VIA/ReExam Sep3/FrontEnd/WebApp/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/bibek/.nuget/NuGet/NuGet.Config"
