@@ -2,7 +2,7 @@ using System.Net.Http;
 
 namespace Frontend;
 
-public class HttpClient
+public class CineFlixHttpClient
 {
     private readonly System.Net.Http.HttpClient _client = new()
     {

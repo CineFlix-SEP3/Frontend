@@ -2,11 +2,13 @@ using Frontend.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Razor Components
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Register UserClient with HttpClient (replace with your API URL)
+builder.Services.AddHttpClient<Frontend.Services.CustomAuthService>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7086");
+});
 builder.Services.AddHttpClient<Frontend.Services.UserClient>(client =>
 {
     client.BaseAddress = new Uri("https://localhost:7086");

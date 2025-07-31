@@ -1,4 +1,4 @@
-@inject Frontend.Services.UserClient UserClient
+@inject Frontend.Services.CustomAuthService AuthService
 @using System.ComponentModel.DataAnnotations
 @using Frontend.DTOs
 @using Frontend.Services
@@ -20,7 +20,7 @@
 <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
     <DataAnnotationsValidator/>
     <ValidationSummary class="validation-summary"/>
-    
+
     <div class="form-group">
         <label>Username</label>
         <InputText class="form-control" @bind-Value="registerModel.Username"/>
@@ -62,14 +62,12 @@
 
         try
         {
-            var result = await UserClient.CreateUserAsync(request);
+            var result = await AuthService.RegisterAsync(request);
 
             if (result != null)
             {
                 successMessage = "Registration successful! Go back to login.";
                 errorMessage = null;
-
-                // Reset the form fields
                 registerModel = new RegisterModel();
             }
             else

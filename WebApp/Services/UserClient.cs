@@ -4,13 +4,6 @@ namespace Frontend.Services;
 
 public class UserClient(System.Net.Http.HttpClient httpClient)
 {
-    public async Task<UserDto?> CreateUserAsync(CreateUserRequest request)
-    {
-        var response = await httpClient.PostAsJsonAsync("api/Auth/register", request);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<UserDto>();
-    }
-
     public async Task<UserDto?> GetUserByIdAsync(int id)
     {
         return await httpClient.GetFromJsonAsync<UserDto>($"api/User/{id}");
