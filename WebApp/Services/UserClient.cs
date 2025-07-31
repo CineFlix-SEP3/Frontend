@@ -6,7 +6,7 @@ public class UserClient(System.Net.Http.HttpClient httpClient)
 {
     public async Task<UserDto?> CreateUserAsync(CreateUserRequest request)
     {
-        var response = await httpClient.PostAsJsonAsync("api/User", request);
+        var response = await httpClient.PostAsJsonAsync("api/Auth/register", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<UserDto>();
     }
