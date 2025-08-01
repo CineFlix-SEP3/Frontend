@@ -1,7 +1,8 @@
-@inject Frontend.Services.CustomAuthService AuthService
+@inject CustomAuthService AuthService
 @using System.ComponentModel.DataAnnotations
 @using Frontend.DTOs
 @using Frontend.Services
+@rendermode InteractiveServer
 
 @if (!string.IsNullOrWhiteSpace(successMessage))
 {

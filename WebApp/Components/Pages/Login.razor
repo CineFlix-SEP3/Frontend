@@ -1,5 +1,6 @@
-@inject Frontend.Services.CustomAuthService AuthService
+@inject Services.CustomAuthService AuthService
 @inject IJSRuntime Js
+@rendermode InteractiveServer
 @using System.IdentityModel.Tokens.Jwt
 @using System.Security.Claims
 @using System.ComponentModel.DataAnnotations
@@ -22,15 +23,19 @@
             Don't have an account?
             <a href="#" @onclick="OnSwitchClicked" @onclick:preventDefault="true">Register</a>
         </p>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-3">@errorMessage</div>
+        }
     </EditForm>
 }
 else if (userRole == "ADMIN")
 {
-    <ManageMovie />
+    <AdminHome />
 }
 else
 {
-    <UserHomePage />
+    <UserHome />
 }
 
 @code {
@@ -40,12 +45,41 @@ else
     private string userRole = string.Empty;
     private string? errorMessage;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await RestoreLoginState();
+            StateHasChanged();
+        }
+    }
+
+    private async Task RestoreLoginState()
+    {
+        var token = await Js.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(token);
+                userRole = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value?.ToUpperInvariant() ?? "";
+                isLoggedIn = true;
+            }
+            catch
+            {
+                isLoggedIn = false;
+                userRole = string.Empty;
+                await Js.InvokeVoidAsync("localStorage.removeItem", "jwt");
+            }
+        }
+    }
+
     private async Task HandleLogin()
     {
         var response = await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
         if (response != null && !string.IsNullOrEmpty(response.Token))
         {
-            // Optionally store the token in localStorage/sessionStorage
             await Js.InvokeVoidAsync("localStorage.setItem", "jwt", response.Token);
 
             var handler = new JwtSecurityTokenHandler();

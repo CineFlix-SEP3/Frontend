@@ -13,6 +13,10 @@ builder.Services.AddHttpClient<Frontend.Services.UserClient>(client =>
 {
     client.BaseAddress = new Uri("https://localhost:7086");
 });
+builder.Services.AddHttpClient<Frontend.Services.MovieClient>(client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7086");
+});
 
 var app = builder.Build();
 

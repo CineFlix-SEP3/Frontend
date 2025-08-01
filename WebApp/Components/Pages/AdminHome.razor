@@ -1,0 +1,150 @@
+@page "/admin/movies"
+@rendermode InteractiveServer
+@using Frontend.DTOs.Movie
+@using Frontend.Services
+@inject MovieClient MovieClient
+@inject CustomAuthService AuthService
+@inject IJSRuntime Js
+
+<link href="adminHome.css" rel="stylesheet" />
+
+<div class="home-header">
+    <h1>🎬 Movie Collection</h1>
+    <div class="header-actions">
+        <button class="add-movie-btn" @onclick="ShowAddMovie">
+            ➕ Add New Movie
+        </button>
+        <div class="menu-container">
+            <button class="menu-btn" @onclick="ToggleMenu">⋮</button>
+            @if (showMenu)
+            {
+                <div class="menu">
+                    <button @onclick="Logout">🚪 Logout</button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (currentView == "list")
+{
+    @if (movies == null)
+    {
+        <div class="loading">Loading movies...</div>
+    }
+    else if (movies.Count == 0)
+    {
+        <div class="empty-state">
+            <h3>No movies yet</h3>
+            <p>Click "Add New Movie" to get started!</p>
+        </div>
+    }
+    else
+    {
+        <div class="movie-grid">
+            @foreach (var movie in movies)
+            {
+                <div class="movie-card">
+                    <img class="poster" src="@movie.PosterUrl" alt="@movie.Title" />
+                    <div class="movie-info">
+                        <h3>@movie.Title</h3>
+                        <div class="stars">@RenderStars(movie.Rating)</div>
+                        <p class="genres">@string.Join(", ", movie.Genres)</p>
+                    </div>
+                    <div class="movie-actions">
+                        <button class="edit-btn" @onclick="() => ShowEditMovie(movie)">
+                            ✏️ Edit
+                        </button>
+                        <button class="delete-btn" @onclick="() => DeleteMovie(movie.Id)">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+else if (currentView == "add")
+{
+    <MovieAddEdit OnSave="HandleMovieSaved" OnCancel="ShowMovieList" />
+}
+else if (currentView == "edit")
+{
+    <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="ShowMovieList" />
+}
+
+@code {
+    private List<MovieDto>? movies;
+    private string currentView = "list";
+    private bool showMenu = false;
+    private MovieDto? selectedMovie = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovies();
+    }
+
+    private async Task LoadMovies()
+    {
+        movies = (await MovieClient.GetAllMoviesAsync())?.ToList();
+    }
+
+    private void ToggleMenu()
+    {
+        showMenu = !showMenu;
+    }
+
+    private void ShowAddMovie()
+    {
+        currentView = "add";
+        selectedMovie = null;
+        showMenu = false;
+    }
+
+    private void ShowEditMovie(MovieDto movie)
+    {
+        selectedMovie = movie;
+        currentView = "edit";
+    }
+
+    private void ShowMovieList()
+    {
+        currentView = "list";
+        selectedMovie = null;
+    }
+
+    private async Task HandleMovieSaved()
+    {
+        await LoadMovies();
+        ShowMovieList();
+    }
+
+    private async Task DeleteMovie(int id)
+    {
+        if (await Confirm("Are you sure you want to delete this movie?"))
+        {
+            await MovieClient.DeleteMovieAsync(id);
+            await LoadMovies();
+        }
+    }
+
+    private async Task<bool> Confirm(string message)
+    {
+        return await Js.InvokeAsync<bool>("confirm", message);
+    }
+
+    private async void Logout()
+    {
+        await AuthService.LogoutAsync();
+        showMenu = false;
+        await Js.InvokeVoidAsync("location.reload");
+    }
+
+    private MarkupString RenderStars(double rating)
+    {
+        int full = (int)(rating / 2);
+        bool half = rating % 2 >= 1;
+        string stars = new string('★', full) + (half ? "½" : "") + new string('☆', 5 - full - (half ? 1 : 0));
+        return (MarkupString)$"<span>{stars}</span>";
+    }
+}
