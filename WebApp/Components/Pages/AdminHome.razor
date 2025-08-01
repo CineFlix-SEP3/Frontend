@@ -4,6 +4,7 @@
 @using Frontend.Services
 @inject MovieClient MovieClient
 @inject CustomAuthService AuthService
+@inject NavigationManager NavigationManager
 @inject IJSRuntime Js
 
 <link href="adminHome.css" rel="stylesheet" />
@@ -133,11 +134,19 @@ else if (currentView == "edit")
         return await Js.InvokeAsync<bool>("confirm", message);
     }
 
-    private async void Logout()
+    private async Task Logout()
     {
-        await AuthService.LogoutAsync();
-        showMenu = false;
-        await Js.InvokeVoidAsync("location.reload");
+        try
+        {
+            await AuthService.LogoutAsync();
+            showMenu = false;
+        
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+        }
     }
 
     private MarkupString RenderStars(double rating)

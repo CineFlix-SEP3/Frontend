@@ -1,41 +1,43 @@
+@page "/login"
 @inject Services.CustomAuthService AuthService
 @inject IJSRuntime Js
+@inject NavigationManager NavigationManager
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
 @rendermode InteractiveServer
 @using System.IdentityModel.Tokens.Jwt
 @using System.Security.Claims
 @using System.ComponentModel.DataAnnotations
 
+<h1>Login</h1>
 @if (!isLoggedIn)
 {
     <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
         <DataAnnotationsValidator />
-        <ValidationSummary class="validation-summary" />
+        
         <div class="form-group">
             <label>Email</label>
             <InputText class="form-control" @bind-Value="loginModel.Email" />
+            <ValidationMessage For="@(() => loginModel.Email)" class="validation-message" />
         </div>
+        
         <div class="form-group">
             <label>Password</label>
             <InputText class="form-control" @bind-Value="loginModel.Password" type="password" />
+            <ValidationMessage For="@(() => loginModel.Password)" class="validation-message" />
         </div>
-        <button class="btn btn-primary" type="submit">Login</button>
+        
+        <button class="btn-primary" type="submit">Login</button>
+        
         <p>
             Don't have an account?
             <a href="#" @onclick="OnSwitchClicked" @onclick:preventDefault="true">Register</a>
         </p>
+        
         @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-danger mt-3">@errorMessage</div>
+            <div class="validation-message">@errorMessage</div>
         }
     </EditForm>
-}
-else if (userRole == "ADMIN")
-{
-    <AdminHome />
-}
-else
-{
-    <UserHome />
 }
 
 @code {
@@ -56,21 +58,32 @@ else
 
     private async Task RestoreLoginState()
     {
-        var token = await Js.InvokeAsync<string>("localStorage.getItem", "jwt");
-        if (!string.IsNullOrEmpty(token))
+        var result = await SessionStorage.GetAsync<string>("authToken");
+        
+        if (result.Success && !string.IsNullOrEmpty(result.Value))
         {
             try
             {
                 var handler = new JwtSecurityTokenHandler();
-                var jwt = handler.ReadJwtToken(token);
+                var jwt = handler.ReadJwtToken(result.Value);
                 userRole = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value?.ToUpperInvariant() ?? "";
                 isLoggedIn = true;
+                
+                // Redirect to admin area if already logged in
+                if (userRole == "ADMIN")
+                {
+                    NavigationManager.NavigateTo("/admin/movies");
+                }
+                else
+                {
+                    NavigationManager.NavigateTo("/");
+                }
             }
             catch
             {
                 isLoggedIn = false;
                 userRole = string.Empty;
-                await Js.InvokeVoidAsync("localStorage.removeItem", "jwt");
+                await SessionStorage.DeleteAsync("authToken");
             }
         }
     }
@@ -80,13 +93,21 @@ else
         var response = await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
         if (response != null && !string.IsNullOrEmpty(response.Token))
         {
-            await Js.InvokeVoidAsync("localStorage.setItem", "jwt", response.Token);
-
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(response.Token);
             userRole = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value?.ToUpperInvariant() ?? "";
             isLoggedIn = true;
             errorMessage = null;
+            
+            // Redirect based on role
+            if (userRole == "ADMIN")
+            {
+                NavigationManager.NavigateTo("/admin/movies");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/");
+            }
         }
         else
         {

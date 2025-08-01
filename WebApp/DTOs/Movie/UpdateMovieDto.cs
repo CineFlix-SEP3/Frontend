@@ -7,7 +7,7 @@ public class UpdateMovieDto
     public List<string> Directors { get; set; } = new();
     public List<string> Actors { get; set; } = new();
     public int RunTime { get; set; }
-    public DateTime ReleaseDate { get; set; }
+    public string ReleaseDate { get; set; }
     public double Rating { get; set; }
     public string Description { get; set; } = string.Empty;
     public string PosterUrl { get; set; } = string.Empty;

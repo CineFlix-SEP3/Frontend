@@ -5,12 +5,12 @@
 <link href="movieAddEdit.css" rel="stylesheet" />
 
 <div class="form-page">
-    <div class="form-header">
-        <h2>@(IsEditing ? "✏️ Edit Movie" : "➕ Add New Movie")</h2>
-        <button class="back-btn" @onclick="OnCancel">← Back to Movies</button>
-    </div>
-
     <div class="form-container">
+        <div class="form-header">
+            <h2>@(IsEditing ? "✏️ Edit Movie" : "➕ Add New Movie")</h2>
+            <button class="back-btn" @onclick="OnCancel">← Back to Movies</button>
+        </div>
+
         <div class="form-grid">
             <div class="form-group">
                 <label>Title</label>
@@ -31,6 +31,28 @@
             <div class="form-group">
                 <label>Rating (0-10)</label>
                 <input type="number" @bind="editingMovie.Rating" placeholder="8.5" step="0.1" min="0" max="10" />
+            </div>
+
+            <div class="form-group">
+                <label>Directors</label>
+                <input @bind="editingMovie.DirectorsString" placeholder="Steven Spielberg, Christopher Nolan" />
+                <small>Separate multiple directors with commas</small>
+            </div>
+
+            <div class="form-group">
+                <label>Actors</label>
+                <input @bind="editingMovie.ActorsString" placeholder="Tom Hanks, Emma Stone" />
+                <small>Separate multiple actors with commas</small>
+            </div>
+
+            <div class="form-group">
+                <label>Runtime (minutes)</label>
+                <input type="number" @bind="editingMovie.RunTime" placeholder="120" min="1" />
+            </div>
+
+            <div class="form-group">
+                <label>Release Date</label>
+                <input type="date" @bind="editingMovie.ReleaseDateValue" />
             </div>
 
             <div class="form-group full-width">
@@ -82,7 +104,8 @@
     {
         return !string.IsNullOrWhiteSpace(editingMovie.Title) &&
                !string.IsNullOrWhiteSpace(editingMovie.PosterUrl) &&
-               editingMovie.Rating >= 0 && editingMovie.Rating <= 10;
+               editingMovie.Rating >= 0 && editingMovie.Rating <= 10 &&
+               editingMovie.RunTime > 0;
     }
 
     private async Task SaveMovie()
@@ -111,9 +134,13 @@
         public int Id { get; set; }
         public string Title { get; set; } = "";
         public string GenresString { get; set; } = "";
+        public string DirectorsString { get; set; } = "";
+        public string ActorsString { get; set; } = "";
         public string PosterUrl { get; set; } = "";
         public double Rating { get; set; }
         public string Description { get; set; } = "";
+        public int RunTime { get; set; } = 120;
+        public DateTime ReleaseDateValue { get; set; } = DateTime.Today;
 
         public EditableMovie() { }
 
@@ -122,35 +149,49 @@
             Id = dto.Id;
             Title = dto.Title;
             GenresString = string.Join(", ", dto.Genres);
+            DirectorsString = string.Join(", ", dto.Directors);
+            ActorsString = string.Join(", ", dto.Actors);
             PosterUrl = dto.PosterUrl;
             Rating = dto.Rating;
             Description = dto.Description;
+            RunTime = dto.RunTime;
+            
+            // Parse the release date if it's not empty
+            if (!string.IsNullOrEmpty(dto.ReleaseDate))
+            {
+                DateTime.TryParse(dto.ReleaseDate, out var date);
+                ReleaseDateValue = date;
+            }
         }
 
         public CreateMovieDto ToCreateDto() => new()
         {
             Title = Title,
-            Genres = GenresString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            Genres = GenresString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct()
+                .ToList(),
+            Directors = DirectorsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            Actors = ActorsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
             PosterUrl = PosterUrl,
             Rating = Rating,
             Description = Description,
-            ReleaseDate = DateTime.Today,
-            Directors = new List<string>(),
-            Actors = new List<string>(),
-            RunTime = 120
+            ReleaseDate = ReleaseDateValue.ToString("yyyy-MM-dd"),
+            RunTime = RunTime
         };
 
         public UpdateMovieDto ToUpdateDto() => new()
         {
             Title = Title,
-            Genres = GenresString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            Genres = GenresString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct()
+                .ToList(),
+            Directors = DirectorsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+            Actors = ActorsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
             PosterUrl = PosterUrl,
             Rating = Rating,
             Description = Description,
-            ReleaseDate = DateTime.Today,
-            Directors = new List<string>(),
-            Actors = new List<string>(),
-            RunTime = 120
+            ReleaseDate = ReleaseDateValue.ToString("yyyy-MM-dd"),
+            RunTime = RunTime
         };
     }
 }

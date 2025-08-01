@@ -6,10 +6,11 @@ body {
 }
 
 .auth-container {
-    min-height: 100vh;
+    height: 100vh; /* Use fixed height instead of min-height */
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 2rem 0; /* Add some padding to prevent sticking to edges */
 }
 
 .auth-box {
