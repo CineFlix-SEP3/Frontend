@@ -1,0 +1,127 @@
+@page "/movie/{Id:int}"
+@rendermode InteractiveServer
+@using Frontend.DTOs.Movie
+@using Frontend.Services
+@inject MovieClient MovieClient
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<link href="DetailedMovieView.css" rel="stylesheet" />
+
+@if (movie == null)
+{
+    <div class="loading">Loading movie details...</div>
+}
+else
+{
+    <div class="movie-detail-container">
+        <div class="movie-header">
+            <button class="back-btn" @onclick="GoBack">← Back</button>
+        </div>
+
+        <div class="movie-detail-content">
+            <div class="movie-poster">
+                <img src="@movie.PosterUrl" alt="@movie.Title" />
+            </div>
+
+            <div class="movie-info">
+                <h1 class="movie-title">@movie.Title</h1>
+                <div class="movie-meta">
+                    <div class="stars">@((MarkupString)RenderStars(movie.Rating))</div>
+                    <span class="rating-value">@movie.Rating.ToString("0.0")/10</span>
+                    <span class="runtime">@movie.RunTime min</span>
+                    <span class="release-year">@movie.ReleaseDate</span>
+                </div>
+
+                <div class="info-section">
+                    <h3>Genres</h3>
+                    <div class="genre-tags">
+                        @foreach (var genre in movie.Genres)
+                        {
+                            <span class="genre-tag">@genre</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Directors</h3>
+                    <p>@string.Join(", ", movie.Directors)</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Cast</h3>
+                    <p>@string.Join(", ", movie.Actors)</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Synopsis</h3>
+                    <p class="description">@movie.Description</p>
+                </div>
+
+                <div class="movie-actions">
+                    <button class="edit-btn" @onclick="() => EditMovie(movie.Id)">
+                        ✏️ Edit Movie
+                    </button>
+                    <button class="delete-btn" @onclick="() => DeleteMovie(movie.Id)">
+                        🗑️ Delete Movie
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private MovieDto? movie;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovie();
+    }
+
+    private async Task LoadMovie()
+    {
+        try
+        {
+            movie = await MovieClient.GetMovieByIdAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading movie: {ex.Message}");
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/admin/movies");
+    }
+
+    private void EditMovie(int id)
+    {
+        NavigationManager.NavigateTo($"/admin/movies?edit={id}&returnTo={id}");
+    }
+
+    private async Task DeleteMovie(int id)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this movie?");
+        if (confirmed)
+        {
+            await MovieClient.DeleteMovieAsync(id);
+            NavigationManager.NavigateTo("/admin/movies");
+        }
+    }
+
+    private string RenderStars(double rating)
+    {
+        int fullStars = (int)(rating / 2);
+        bool halfStar = (rating % 2) >= 1;
+        int emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+
+        string stars = string.Concat(Enumerable.Repeat("★", fullStars)) +
+                      (halfStar ? "½" : "") +
+                      string.Concat(Enumerable.Repeat("☆", emptyStars));
+
+        return stars;
+    }
+}

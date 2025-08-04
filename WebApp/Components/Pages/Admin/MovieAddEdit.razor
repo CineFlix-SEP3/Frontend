@@ -8,7 +8,7 @@
     <div class="form-container">
         <div class="form-header">
             <h2>@(IsEditing ? "✏️ Edit Movie" : "➕ Add New Movie")</h2>
-            <button class="back-btn" @onclick="OnCancel">← Back to Movies</button>
+            <button class="back-btn" @onclick="OnCancel">← Back</button>
         </div>
 
         <div class="form-grid">
@@ -155,7 +155,7 @@
             Rating = dto.Rating;
             Description = dto.Description;
             RunTime = dto.RunTime;
-            
+
             // Parse the release date if it's not empty
             if (!string.IsNullOrEmpty(dto.ReleaseDate))
             {
