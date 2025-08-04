@@ -59,12 +59,8 @@ else
                 </div>
 
                 <div class="movie-actions">
-                    <button class="edit-btn" @onclick="() => EditMovie(movie.Id)">
-                        ✏️ Edit Movie
-                    </button>
-                    <button class="delete-btn" @onclick="() => DeleteMovie(movie.Id)">
-                        🗑️ Delete Movie
-                    </button>
+                    <button class="edit-btn" @onclick="() => EditMovie(movie.Id)">✏️ Edit Movie</button>
+                    <button class="delete-btn" @onclick="() => DeleteMovie(movie.Id)">🗑️ Delete Movie</button>
                 </div>
             </div>
         </div>
@@ -94,12 +90,12 @@ else
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo("/admin/movies");
+        NavigationManager.NavigateTo("/movies");
     }
 
     private void EditMovie(int id)
     {
-        NavigationManager.NavigateTo($"/admin/movies?edit={id}&returnTo={id}");
+        NavigationManager.NavigateTo($"/movies?edit={id}&returnTo={id}");
     }
 
     private async Task DeleteMovie(int id)
@@ -108,7 +104,7 @@ else
         if (confirmed)
         {
             await MovieClient.DeleteMovieAsync(id);
-            NavigationManager.NavigateTo("/admin/movies");
+            NavigationManager.NavigateTo("/movies");
         }
     }
 

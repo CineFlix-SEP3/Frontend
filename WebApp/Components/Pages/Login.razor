@@ -99,15 +99,7 @@
             isLoggedIn = true;
             errorMessage = null;
             
-            // Redirect based on role
-            if (userRole == "ADMIN")
-            {
-                NavigationManager.NavigateTo("/admin/movies");
-            }
-            else
-            {
-                NavigationManager.NavigateTo("/");
-            }
+            NavigationManager.NavigateTo("/movies");
         }
         else
         {

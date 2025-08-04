@@ -1,0 +1,46 @@
+@using Frontend.DTOs.Movie
+@using Frontend.Services
+@inject MovieClient MovieClient
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private MovieDto? movie;
+
+    protected override async Task OnInitializedAsync()
+    {
+        movie = await MovieClient.GetMovieByIdAsync(Id);
+    }
+}
+
+@if (movie == null)
+{
+    <div class="loading">Loading movie details...</div>
+}
+else
+{
+    <div class="user-movie-detail">
+        <img src="@movie.PosterUrl" alt="@movie.Title" class="poster" />
+        <h2>@movie.Title</h2>
+        <div>
+            <strong>Genres:</strong> @string.Join(", ", movie.Genres)
+        </div>
+        <div>
+            <strong>Directors:</strong> @string.Join(", ", movie.Directors)
+        </div>
+        <div>
+            <strong>Actors:</strong> @string.Join(", ", movie.Actors)
+        </div>
+        <div>
+            <strong>Rating:</strong> @movie.Rating.ToString("0.0")/10
+        </div>
+        <div>
+            <strong>Runtime:</strong> @movie.RunTime min
+        </div>
+        <div>
+            <strong>Release Date:</strong> @movie.ReleaseDate
+        </div>
+        <div>
+            <strong>Description:</strong> @movie.Description
+        </div>
+    </div>
+}

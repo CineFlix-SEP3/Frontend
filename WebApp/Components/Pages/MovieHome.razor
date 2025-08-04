@@ -1,4 +1,4 @@
-@page "/admin/movies"
+@page "/movies"
 @rendermode InteractiveServer
 @using Frontend.DTOs.Movie
 @using Frontend.Services
@@ -6,17 +6,21 @@
 @inject MovieClient MovieClient
 @inject CustomAuthService AuthService
 @inject NavigationManager NavigationManager
-@inject IJSRuntime Js
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
 @using Frontend.Components.Pages.Admin
+@using Frontend.Components.Pages.User
 
 <link href="adminHome.css" rel="stylesheet" />
 
 <div class="home-header">
     <h1>🎬 Movie Collection</h1>
     <div class="header-actions">
-        <button class="add-movie-btn" @onclick="ShowAddMovie">
-            ➕ Add New Movie
-        </button>
+        @if (isAdmin)
+        {
+            <button class="add-movie-btn" @onclick="ShowAddMovie">
+                ➕ Add New Movie
+            </button>
+        }
         <div class="menu-container">
             <button class="menu-btn" @onclick="ToggleMenu">⋮</button>
             @if (showMenu)
@@ -47,7 +51,7 @@
         <div class="movie-grid">
             @foreach (var movie in movies)
             {
-                <div class="movie-card" @onclick="() => NavigateToMovieDetails(movie.Id)">
+                <div class="movie-card" @onclick="() => ShowMovieDetail(movie.Id)">
                     <img class="poster" src="@movie.PosterUrl" alt="@movie.Title" />
                     <div class="movie-info">
                         <h3>@movie.Title</h3>
@@ -59,13 +63,24 @@
         </div>
     }
 }
-else if (currentView == "add")
+else if (currentView == "add" && isAdmin)
 {
     <MovieAddEdit OnSave="HandleMovieSaved" OnCancel="ShowMovieList" />
 }
-else if (currentView == "edit")
+else if (currentView == "edit" && isAdmin)
 {
     <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="HandleEditCancel" />
+}
+else if (currentView == "detail" && selectedMovieId != null)
+{
+    @if (isAdmin)
+    {
+        <AdminMovieView Id="selectedMovieId.Value" />
+    }
+    else
+    {
+        <UserMovieView Id="selectedMovieId.Value" />
+    }
 }
 
 @code {
@@ -73,16 +88,79 @@ else if (currentView == "edit")
     private string currentView = "list";
     private bool showMenu = false;
     private MovieDto? selectedMovie = null;
+    private int? selectedMovieId = null;
     private string? returnToDetailId;
+    private bool isAdmin = false;
+    private bool isInitialized = false;
+    private bool locationHandlerAttached = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadMovies();
+        if (firstRender && !isInitialized)
+        {
+            var result = await SessionStorage.GetAsync<string>("authToken");
+            var token = result.Success ? result.Value : null;
 
+            if (!string.IsNullOrEmpty(token))
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(token);
+                var role = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
+                isAdmin = role?.ToUpperInvariant() == "ADMIN";
+            }
+            else
+            {
+                isAdmin = false;
+            }
+
+            await LoadMovies();
+
+            UpdateViewFromQuery();
+
+            isInitialized = true;
+            StateHasChanged();
+        }
+
+        // Attach location changed handler once
+        if (!locationHandlerAttached)
+        {
+            NavigationManager.LocationChanged += HandleLocationChanged;
+            locationHandlerAttached = true;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (isInitialized)
+        {
+            UpdateViewFromQuery();
+        }
+    }
+
+    private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (isInitialized)
+        {
+            UpdateViewFromQuery();
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (locationHandlerAttached)
+        {
+            NavigationManager.LocationChanged -= HandleLocationChanged;
+            locationHandlerAttached = false;
+        }
+    }
+
+    private void UpdateViewFromQuery()
+    {
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
-        var queryParams = QueryHelpers.ParseQuery(uri.Query);
-        
-        if (queryParams.TryGetValue("edit", out var editId))
+        var queryParams = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        if (isAdmin && queryParams.TryGetValue("edit", out var editId))
         {
             if (int.TryParse(editId, out var id))
             {
@@ -90,15 +168,29 @@ else if (currentView == "edit")
                 if (movieToEdit != null)
                 {
                     ShowEditMovie(movieToEdit);
-                    
-                    // Check if we should return to detail view
+
                     if (queryParams.TryGetValue("returnTo", out var returnPath))
                     {
                         returnToDetailId = returnPath;
                     }
+                    else
+                    {
+                        returnToDetailId = null;
+                    }
+                    return;
                 }
             }
         }
+        else if (isAdmin && queryParams.TryGetValue("returnTo", out var detailId))
+        {
+            if (int.TryParse(detailId, out var id))
+            {
+                ShowMovieDetail(id);
+                return;
+            }
+        }
+
+        ShowMovieList();
     }
 
     private async Task LoadMovies()
@@ -113,6 +205,7 @@ else if (currentView == "edit")
 
     private void ShowAddMovie()
     {
+        if (!isAdmin) return;
         currentView = "add";
         selectedMovie = null;
         showMenu = false;
@@ -120,6 +213,7 @@ else if (currentView == "edit")
 
     private void ShowEditMovie(MovieDto movie)
     {
+        if (!isAdmin) return;
         selectedMovie = movie;
         currentView = "edit";
     }
@@ -128,6 +222,7 @@ else if (currentView == "edit")
     {
         currentView = "list";
         selectedMovie = null;
+        selectedMovieId = null;
         returnToDetailId = null;
     }
 
@@ -135,7 +230,7 @@ else if (currentView == "edit")
     {
         if (!string.IsNullOrEmpty(returnToDetailId))
         {
-            NavigationManager.NavigateTo($"/movie/{returnToDetailId}");
+            ShowMovieDetail(int.Parse(returnToDetailId));
         }
         else
         {
@@ -143,37 +238,23 @@ else if (currentView == "edit")
         }
     }
 
-    private void NavigateToMovieDetails(int id)
+    private void ShowMovieDetail(int id)
     {
-        NavigationManager.NavigateTo($"/movie/{id}");
+        selectedMovieId = id;
+        currentView = "detail";
     }
 
     private async Task HandleMovieSaved()
     {
         await LoadMovies();
-        
         if (!string.IsNullOrEmpty(returnToDetailId))
         {
-            NavigationManager.NavigateTo($"/movie/{returnToDetailId}");
+            ShowMovieDetail(int.Parse(returnToDetailId));
         }
         else
         {
             ShowMovieList();
         }
-    }
-
-    private async Task DeleteMovie(int id)
-    {
-        if (await Confirm("Are you sure you want to delete this movie?"))
-        {
-            await MovieClient.DeleteMovieAsync(id);
-            await LoadMovies();
-        }
-    }
-
-    private async Task<bool> Confirm(string message)
-    {
-        return await Js.InvokeAsync<bool>("confirm", message);
     }
 
     private async Task Logout()
@@ -182,7 +263,6 @@ else if (currentView == "edit")
         {
             await AuthService.LogoutAsync();
             showMenu = false;
-
             NavigationManager.NavigateTo("/", forceLoad: true);
         }
         catch (Exception ex)
