@@ -1,16 +1,13 @@
 @using Frontend.DTOs.Movie
 @using Frontend.Services
 @inject MovieClient MovieClient
+@inject ReviewClient ReviewClient
+@inject CustomAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
+@inject IJSRuntime JS
 
-@code {
-    [Parameter] public int Id { get; set; }
-    private MovieDto? movie;
-
-    protected override async Task OnInitializedAsync()
-    {
-        movie = await MovieClient.GetMovieByIdAsync(Id);
-    }
-}
+<link href="DetailedMovieView.css" rel="stylesheet" />
 
 @if (movie == null)
 {
@@ -18,29 +15,199 @@
 }
 else
 {
-    <div class="user-movie-detail">
-        <img src="@movie.PosterUrl" alt="@movie.Title" class="poster" />
-        <h2>@movie.Title</h2>
-        <div>
-            <strong>Genres:</strong> @string.Join(", ", movie.Genres)
+    <div class="movie-detail-container">
+        <div class="movie-header">
+            <button class="back-btn" @onclick="GoBack">← Back</button>
         </div>
-        <div>
-            <strong>Directors:</strong> @string.Join(", ", movie.Directors)
-        </div>
-        <div>
-            <strong>Actors:</strong> @string.Join(", ", movie.Actors)
-        </div>
-        <div>
-            <strong>Rating:</strong> @movie.Rating.ToString("0.0")/10
-        </div>
-        <div>
-            <strong>Runtime:</strong> @movie.RunTime min
-        </div>
-        <div>
-            <strong>Release Date:</strong> @movie.ReleaseDate
-        </div>
-        <div>
-            <strong>Description:</strong> @movie.Description
+
+        <div class="movie-detail-content">
+            <div class="movie-poster">
+                <img src="@movie.PosterUrl" alt="@movie.Title" />
+            </div>
+
+            <div class="movie-info">
+                <h1 class="movie-title">@movie.Title</h1>
+                <div class="movie-meta">
+                    <div class="stars">@((MarkupString)RenderStars(movie.Rating))</div>
+                    <span class="rating-value">@movie.Rating.ToString("0.0")/10</span>
+                    <span class="runtime">@movie.RunTime min</span>
+                    <span class="release-year">@movie.ReleaseDate</span>
+                </div>
+
+                <div class="info-section">
+                    <h3>Genres</h3>
+                    <div class="genre-tags">
+                        @foreach (var genre in movie.Genres)
+                        {
+                            <span class="genre-tag">@genre</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Directors</h3>
+                    <p>@string.Join(", ", movie.Directors)</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Cast</h3>
+                    <p>@string.Join(", ", movie.Actors)</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Synopsis</h3>
+                    <p class="description">@movie.Description</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>Reviews</h3>
+                    @if (userReview != null)
+                    {
+                        <div class="user-review highlight">
+                            <strong>Your Review</strong>
+                            <div class="stars">@((MarkupString)RenderStars(userReview.Rating))</div>
+                            <p>@userReview.Comment</p>
+                        </div>
+                    }
+                    <div class="review-list">
+                        @foreach (var review in otherReviews)
+                        {
+                            <div class="review-item">
+                                <strong>@review.UserName</strong>
+                                <div class="stars">@((MarkupString)RenderStars(review.Rating))</div>
+                                <p>@review.Comment</p>
+                            </div>
+                        }
+                    </div>
+                    <div class="review-form">
+                        <h4>@(userReview == null ? "Write a Review" : "Update Your Review")</h4>
+                        <input type="number" min="1" max="10" step="1" @bind="reviewRating" class="review-rating-input" />
+                        <textarea @bind="reviewComment" placeholder="Your review..." rows="3" class="review-comment-input"></textarea>
+                        <button class="save-btn" @onclick="SubmitReview">
+                            @(userReview == null ? "Submit Review" : "Update Review")
+                        </button>
+                        @if (!string.IsNullOrEmpty(reviewError))
+                        {
+                            <div class="validation-message">@reviewError</div>
+                        }
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private MovieDto? movie;
+    private List<ReviewDto> reviews = new();
+    private ReviewDto? userReview;
+    private List<ReviewDto> otherReviews = new();
+    private string? userId;
+    private string? userName;
+    private int reviewRating = 10;
+    private string reviewComment = "";
+    private string? reviewError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovie();
+        await LoadUserInfo();
+        await LoadReviews();
+    }
+
+    private async Task LoadMovie()
+    {
+        movie = await MovieClient.GetMovieByIdAsync(Id);
+    }
+
+    private async Task LoadUserInfo()
+    {
+        var result = await SessionStorage.GetAsync<string>("authToken");
+        if (result.Success && !string.IsNullOrEmpty(result.Value))
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(result.Value);
+            userId = jwt.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            userName = jwt.Claims.FirstOrDefault(c => c.Type == "username")?.Value ?? "You";
+        }
+    }
+
+    private async Task LoadReviews()
+    {
+        reviews = await ReviewClient.GetReviewsForMovieAsync(Id);
+        userReview = reviews.FirstOrDefault(r => r.UserId == userId);
+        otherReviews = reviews.Where(r => r.UserId != userId).ToList();
+
+        if (userReview != null)
+        {
+            reviewRating = userReview.Rating;
+            reviewComment = userReview.Comment;
+        }
+    }
+
+    private async Task SubmitReview()
+    {
+        reviewError = null;
+        if (reviewRating < 1 || reviewRating > 10 || string.IsNullOrWhiteSpace(reviewComment))
+        {
+            reviewError = "Please enter a rating (1-10) and a comment.";
+            return;
+        }
+
+        var reviewDto = new ReviewDto
+        {
+            MovieId = Id,
+            UserId = userId ?? "",
+            UserName = userName ?? "You",
+            Rating = reviewRating,
+            Comment = reviewComment
+        };
+
+        bool success;
+        if (userReview == null)
+        {
+            success = await ReviewClient.AddReviewAsync(reviewDto);
+        }
+        else
+        {
+            success = await ReviewClient.UpdateReviewAsync(reviewDto);
+        }
+
+        if (success)
+        {
+            await LoadReviews();
+        }
+        else
+        {
+            reviewError = "Failed to submit review. Please try again.";
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/movies");
+    }
+
+    private string RenderStars(double rating)
+    {
+        int fullStars = (int)(rating / 2);
+        bool halfStar = (rating % 2) >= 1;
+        int emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+
+        string stars = string.Concat(Enumerable.Repeat("★", fullStars)) +
+                      (halfStar ? "½" : "") +
+                      string.Concat(Enumerable.Repeat("☆", emptyStars));
+
+        return stars;
+    }
+
+    public class ReviewDto
+    {
+        public int MovieId { get; set; }
+        public string UserId { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public int Rating { get; set; }
+        public string Comment { get; set; } = "";
+    }
 }
