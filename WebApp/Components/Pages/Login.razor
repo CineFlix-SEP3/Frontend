@@ -93,6 +93,8 @@
         var response = await AuthService.LoginAsync(loginModel.Email, loginModel.Password);
         if (response != null && !string.IsNullOrEmpty(response.Token))
         {
+            await SessionStorage.SetAsync("authToken", response.Token);
+
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(response.Token);
             userRole = jwt.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value?.ToUpperInvariant() ?? "";

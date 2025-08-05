@@ -38,6 +38,15 @@ builder.Services.AddHttpClient<Frontend.Services.MovieClient>(client =>
         UseCookies = true,
         CookieContainer = new CookieContainer()
     });
+builder.Services.AddHttpClient<Frontend.Services.ReviewClient>(client =>
+    {
+        client.BaseAddress = new Uri("https://localhost:7086");
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        UseCookies = true,
+        CookieContainer = new CookieContainer()
+    });
 
 var app = builder.Build();
 

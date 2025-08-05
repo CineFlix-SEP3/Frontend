@@ -1,4 +1,5 @@
 @using Frontend.DTOs.Movie
+@using Frontend.DTOs.Review
 @using Frontend.Services
 @inject MovieClient MovieClient
 @inject ReviewClient ReviewClient
@@ -66,16 +67,16 @@ else
                         <div class="user-review highlight">
                             <strong>Your Review</strong>
                             <div class="stars">@((MarkupString)RenderStars(userReview.Rating))</div>
-                            <p>@userReview.Comment</p>
+                            <p>@userReview.Text</p>
                         </div>
                     }
                     <div class="review-list">
                         @foreach (var review in otherReviews)
                         {
                             <div class="review-item">
-                                <strong>@review.UserName</strong>
+                                <strong>@review.UserId</strong>
                                 <div class="stars">@((MarkupString)RenderStars(review.Rating))</div>
-                                <p>@review.Comment</p>
+                                <p>@review.Text</p>
                             </div>
                         }
                     </div>
@@ -103,7 +104,7 @@ else
     private List<ReviewDto> reviews = new();
     private ReviewDto? userReview;
     private List<ReviewDto> otherReviews = new();
-    private string? userId;
+    private int? userId;
     private string? userName;
     private int reviewRating = 10;
     private string reviewComment = "";
@@ -121,6 +122,7 @@ else
         movie = await MovieClient.GetMovieByIdAsync(Id);
     }
 
+    // Only one LoadUserInfo method, using ClaimTypes.NameIdentifier
     private async Task LoadUserInfo()
     {
         var result = await SessionStorage.GetAsync<string>("authToken");
@@ -128,50 +130,61 @@ else
         {
             var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(result.Value);
-            userId = jwt.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            var userIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             userName = jwt.Claims.FirstOrDefault(c => c.Type == "username")?.Value ?? "You";
+            userId = int.TryParse(userIdClaim, out var uid) && uid > 0 ? uid : null;
         }
     }
 
     private async Task LoadReviews()
     {
-        reviews = await ReviewClient.GetReviewsForMovieAsync(Id);
-        userReview = reviews.FirstOrDefault(r => r.UserId == userId);
-        otherReviews = reviews.Where(r => r.UserId != userId).ToList();
-
+        var result = await ReviewClient.GetReviewsByMovieAsync(Id);
+        reviews = result?.ToList() ?? new();
+        userReview = userId.HasValue ? reviews.FirstOrDefault(r => r.UserId == userId.Value) : null;
+        otherReviews = userId.HasValue ? reviews.Where(r => r.UserId != userId.Value).ToList() : reviews;
         if (userReview != null)
         {
-            reviewRating = userReview.Rating;
-            reviewComment = userReview.Comment;
+            reviewRating = (int)userReview.Rating;
+            reviewComment = userReview.Text;
         }
     }
 
     private async Task SubmitReview()
     {
         reviewError = null;
+        if (!userId.HasValue)
+        {
+            reviewError = "User not authenticated.";
+            return;
+        }
         if (reviewRating < 1 || reviewRating > 10 || string.IsNullOrWhiteSpace(reviewComment))
         {
             reviewError = "Please enter a rating (1-10) and a comment.";
             return;
         }
 
-        var reviewDto = new ReviewDto
-        {
-            MovieId = Id,
-            UserId = userId ?? "",
-            UserName = userName ?? "You",
-            Rating = reviewRating,
-            Comment = reviewComment
-        };
-
         bool success;
         if (userReview == null)
         {
-            success = await ReviewClient.AddReviewAsync(reviewDto);
+            var dto = new CreateReviewDto
+            {
+                MovieId = Id,
+                UserId = userId.Value,
+                Text = reviewComment,
+                Rating = reviewRating
+            };
+            var created = await ReviewClient.CreateReviewAsync(dto);
+            success = created != null;
         }
         else
         {
-            success = await ReviewClient.UpdateReviewAsync(reviewDto);
+            var dto = new UpdateReviewDto
+            {
+                Text = reviewComment,
+                Rating = reviewRating
+            };
+            var updated = await ReviewClient.UpdateReviewAsync(userReview.Id, dto);
+            success = updated != null;
         }
 
         if (success)
@@ -200,14 +213,5 @@ else
                       string.Concat(Enumerable.Repeat("☆", emptyStars));
 
         return stars;
-    }
-
-    public class ReviewDto
-    {
-        public int MovieId { get; set; }
-        public string UserId { get; set; } = "";
-        public string UserName { get; set; } = "";
-        public int Rating { get; set; }
-        public string Comment { get; set; } = "";
     }
 }
