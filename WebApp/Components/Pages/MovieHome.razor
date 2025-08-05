@@ -10,7 +10,7 @@
 @using Frontend.Components.Pages.Admin
 @using Frontend.Components.Pages.User
 
-<link href="adminHome.css" rel="stylesheet" />
+<link href="movieHome.css" rel="stylesheet" />
 
 <div class="home-header">
     <h1>🎬 Movie Collection</h1>
@@ -26,6 +26,7 @@
             @if (showMenu)
             {
                 <div class="menu">
+                    <button @onclick="GoToProfile">👤 Profile</button>
                     <button @onclick="Logout">🚪 Logout</button>
                 </div>
             }
@@ -277,5 +278,10 @@ else if (currentView == "detail" && selectedMovieId != null)
         bool half = rating % 2 >= 1;
         string stars = new string('★', full) + (half ? "½" : "") + new string('☆', 5 - full - (half ? 1 : 0));
         return (MarkupString)$"<span>{stars}</span>";
+    }
+    private void GoToProfile()
+    {
+        NavigationManager.NavigateTo("/profile");
+        showMenu = false;
     }
 }

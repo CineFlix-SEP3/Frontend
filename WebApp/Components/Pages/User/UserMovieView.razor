@@ -1,14 +1,16 @@
+@page "/user/movie/{Id:int}"
 @using Frontend.DTOs.Movie
 @using Frontend.DTOs.Review
 @using Frontend.Services
 @inject MovieClient MovieClient
 @inject ReviewClient ReviewClient
+@inject UserClient UserClient
 @inject CustomAuthService AuthService
 @inject NavigationManager NavigationManager
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
 @inject IJSRuntime JS
 
-<link href="DetailedMovieView.css" rel="stylesheet" />
+<link href="DetailedMovieView.css" rel="stylesheet"/>
 
 @if (movie == null)
 {
@@ -23,7 +25,7 @@ else
 
         <div class="movie-detail-content">
             <div class="movie-poster">
-                <img src="@movie.PosterUrl" alt="@movie.Title" />
+                <img src="@movie.PosterUrl" alt="@movie.Title"/>
             </div>
 
             <div class="movie-info">
@@ -62,34 +64,107 @@ else
 
                 <div class="info-section">
                     <h3>Reviews</h3>
-                    @if (userReview != null)
-                    {
-                        <div class="user-review highlight">
-                            <strong>Your Review</strong>
-                            <div class="stars">@((MarkupString)RenderStars(userReview.Rating))</div>
-                            <p>@userReview.Text</p>
-                        </div>
-                    }
-                    <div class="review-list">
-                        @foreach (var review in otherReviews)
-                        {
-                            <div class="review-item">
-                                <strong>@review.UserId</strong>
-                                <div class="stars">@((MarkupString)RenderStars(review.Rating))</div>
-                                <p>@review.Text</p>
-                            </div>
-                        }
-                    </div>
+
+                    <!-- Review Form -->
                     <div class="review-form">
                         <h4>@(userReview == null ? "Write a Review" : "Update Your Review")</h4>
-                        <input type="number" min="1" max="10" step="1" @bind="reviewRating" class="review-rating-input" />
-                        <textarea @bind="reviewComment" placeholder="Your review..." rows="3" class="review-comment-input"></textarea>
-                        <button class="save-btn" @onclick="SubmitReview">
-                            @(userReview == null ? "Submit Review" : "Update Review")
-                        </button>
-                        @if (!string.IsNullOrEmpty(reviewError))
+                        <div class="form-fields">
+                            <div class="rating-input-section">
+                                <label class="rating-label">Rating:</label>
+                                <div class="rating-controls">
+                                    <button type="button" class="rating-btn" @onclick="DecreaseRating"
+                                            disabled="@(reviewRating <= 1)">−
+                                    </button>
+                                    <input type="range" min="1" max="10" step="0.5" @bind="reviewRating"
+                                           class="review-rating-slider"/>
+                                    <button type="button" class="rating-btn" @onclick="IncreaseRating"
+                                            disabled="@(reviewRating >= 10)">+
+                                    </button>
+                                    <div class="rating-display">
+                                        <span class="slider-value">@reviewRating.ToString("0.0")</span>
+                                        <div class="rating-stars">@((MarkupString)RenderStars(reviewRating))</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="comment-input-section">
+                                <label class="comment-label">Your Review:</label>
+                                <textarea @bind="reviewComment" placeholder="Share your thoughts about this movie..."
+                                          rows="4" class="review-comment-input"></textarea>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="submit-review-btn" @onclick="SubmitReview">
+                                @(userReview == null ? "Submit Review" : "Update Review")
+                            </button>
+                            @if (!string.IsNullOrEmpty(reviewError))
+                            {
+                                <div class="error-message">@reviewError</div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Your Review -->
+                    @if (userReview != null)
+                    {
+                        <div class="user-review-card">
+                            <div class="review-header">
+                                <div class="review-author">
+                                    <strong>Your Review</strong>
+                                    <span class="review-badge">You</span>
+                                </div>
+                                <div class="review-rating">
+                                    <div class="stars">@((MarkupString)RenderStars(userReview.Rating))</div>
+                                    <span class="rating-value">@userReview.Rating.ToString("0.0")</span>
+                                </div>
+                                <div class="review-actions">
+                                    <button class="review-menu-btn" @onclick="ToggleMenu" aria-label="Review options">
+                                        ⋮
+                                    </button>
+                                    @if (showMenu)
+                                    {
+                                        <div class="review-menu-dropdown">
+                                            <button class="menu-delete-btn" @onclick="DeleteReview">Delete Review
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="review-content">
+                                <p>@userReview.Text</p>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Other Reviews -->
+                    <div class="reviews-section">
+                        @if (reviews.Count == 0)
                         {
-                            <div class="validation-message">@reviewError</div>
+                            <div class="no-reviews">
+                                <p>No reviews yet. Be the first to share your thoughts!</p>
+                            </div>
+                        }
+                        else if (otherReviews.Count > 0)
+                        {
+                            <h5 class="other-reviews-title">Other Reviews (@otherReviews.Count)</h5>
+                            <div class="review-list">
+                                @foreach (var review in otherReviews)
+                                {
+                                    <div class="review-card">
+                                        <div class="review-header">
+                                            <div class="review-author">
+                                                <strong>@GetUserName(review.UserId)</strong>
+                                            </div>
+                                            <div class="review-rating">
+                                                <div class="stars">@((MarkupString)RenderStars(review.Rating))</div>
+                                                <span class="rating-value">@review.Rating.ToString("0.0")</span>
+                                            </div>
+                                        </div>
+                                        <div class="review-content">
+                                            <p>@review.Text</p>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
                         }
                     </div>
                 </div>
@@ -106,15 +181,19 @@ else
     private List<ReviewDto> otherReviews = new();
     private int? userId;
     private string? userName;
-    private int reviewRating = 10;
+    private double reviewRating = 10.0;
     private string reviewComment = "";
     private string? reviewError;
+    private bool showMenu = false;
+
+    private Dictionary<int, string> userIdToName = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadMovie();
         await LoadUserInfo();
         await LoadReviews();
+        await LoadUserNamesForReviews();
     }
 
     private async Task LoadMovie()
@@ -122,7 +201,6 @@ else
         movie = await MovieClient.GetMovieByIdAsync(Id);
     }
 
-    // Only one LoadUserInfo method, using ClaimTypes.NameIdentifier
     private async Task LoadUserInfo()
     {
         var result = await SessionStorage.GetAsync<string>("authToken");
@@ -144,9 +222,37 @@ else
         otherReviews = userId.HasValue ? reviews.Where(r => r.UserId != userId.Value).ToList() : reviews;
         if (userReview != null)
         {
-            reviewRating = (int)userReview.Rating;
+            reviewRating = userReview.Rating;
             reviewComment = userReview.Text;
         }
+    }
+
+    private async Task LoadUserNamesForReviews()
+    {
+        var userIds = otherReviews.Select(r => r.UserId).Distinct().ToList();
+        foreach (var id in userIds)
+        {
+            if (!userIdToName.ContainsKey(id))
+            {
+                try
+                {
+                    var user = await UserClient.GetUserByIdAsync(id);
+                    userIdToName[id] = user?.Username ?? $"User {id}";
+                }
+                catch (HttpRequestException)
+                {
+                    userIdToName[id] = $"User {id}";
+                }
+            }
+        }
+        StateHasChanged();
+    }
+
+    private string GetUserName(int userId)
+    {
+        if (userIdToName.TryGetValue(userId, out var name))
+            return name;
+        return $"User {userId}";
     }
 
     private async Task SubmitReview()
@@ -157,6 +263,7 @@ else
             reviewError = "User not authenticated.";
             return;
         }
+
         if (reviewRating < 1 || reviewRating > 10 || string.IsNullOrWhiteSpace(reviewComment))
         {
             reviewError = "Please enter a rating (1-10) and a comment.";
@@ -190,10 +297,27 @@ else
         if (success)
         {
             await LoadReviews();
+            await LoadUserNamesForReviews();
         }
         else
         {
             reviewError = "Failed to submit review. Please try again.";
+        }
+    }
+
+    private void IncreaseRating()
+    {
+        if (reviewRating < 10)
+        {
+            reviewRating = Math.Min(10, reviewRating + 0.5);
+        }
+    }
+
+    private void DecreaseRating()
+    {
+        if (reviewRating > 1)
+        {
+            reviewRating = Math.Max(1, reviewRating - 0.5);
         }
     }
 
@@ -209,9 +333,32 @@ else
         int emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
 
         string stars = string.Concat(Enumerable.Repeat("★", fullStars)) +
-                      (halfStar ? "½" : "") +
-                      string.Concat(Enumerable.Repeat("☆", emptyStars));
+                       (halfStar ? "½" : "") +
+                       string.Concat(Enumerable.Repeat("☆", emptyStars));
 
         return stars;
+    }
+
+    private void ToggleMenu()
+    {
+        showMenu = !showMenu;
+    }
+
+    private async Task DeleteReview()
+    {
+        showMenu = false;
+        if (userReview != null)
+        {
+            var deleted = await ReviewClient.DeleteReviewAsync(userReview.Id);
+            if (deleted)
+            {
+                await LoadReviews();
+                await LoadUserNamesForReviews();
+            }
+            else
+            {
+                reviewError = "Failed to delete review.";
+            }
+        }
     }
 }

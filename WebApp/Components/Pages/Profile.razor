@@ -1,0 +1,169 @@
+@page "/profile"
+@using Frontend.DTOs
+@using Frontend.Services
+@rendermode InteractiveServer
+@inject UserClient UserClient
+@inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
+@inject NavigationManager NavigationManager
+
+<link href="profile.css" rel="stylesheet" />
+<link href="movieAddEdit.css" rel="stylesheet" />
+
+<div class="profile-container">
+    @if (showLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <span>Redirecting...</span>
+        </div>
+    }
+    @if (isLoading)
+    {
+        <div class="loading">Loading profile...</div>
+    }
+    else if (user == null)
+    {
+        <div class="error-message">Could not load user info.</div>
+    }
+    else
+    {
+        <div class="profile-card">
+            <button class="back-btn" @onclick="GoBack">← Back</button>
+            <h2>Profile</h2>
+            <div class="profile-info">
+                <p><strong>Email:</strong> @user.Email</p>
+                <p><strong>Role:</strong> @user.UserRole</p>
+            </div>
+            <EditForm Model="editModel" OnValidSubmit="UpdateProfile">
+                <div class="form-fields">
+                    <label>Username</label>
+                    <InputText @bind-Value="editModel.Username" class="form-control"/>
+                    <label>Email</label>
+                    <InputText @bind-Value="editModel.Email" class="form-control"/>
+                    <label>Password (leave blank to keep unchanged)</label>
+                    <InputText @bind-Value="editModel.Password" class="form-control" type="password"/>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="save-btn">Save Changes</button>
+                    <button type="button" class="delete-btn" @onclick="ShowDeleteConfirm">Delete Account</button>
+                </div>
+                @if (!string.IsNullOrEmpty(message))
+                {
+                    <div class="error-message">@message</div>
+                }
+            </EditForm>
+            @if (showDeleteConfirm)
+            {
+                <div class="delete-confirm-modal">
+                    <div class="modal-content">
+                        <p>
+                            Are you sure you want to delete your account?<br/>
+                            <strong>All your reviews will also be deleted.</strong>
+                        </p>
+                        <div class="form-actions">
+                            <button class="delete-btn" @onclick="DeleteAccount">Yes, Delete</button>
+                            <button class="back-btn" @onclick="CancelDelete">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private UserDto? user;
+    private UpdateUserRequest editModel = new();
+    private bool isLoading = true;
+    private string message = "";
+    private bool hasLoaded = false;
+    private bool showDeleteConfirm = false;
+    private bool showLoading = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !hasLoaded)
+        {
+            var tokenResult = await SessionStorage.GetAsync<string>("authToken");
+            if (tokenResult.Success && !string.IsNullOrEmpty(tokenResult.Value))
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(tokenResult.Value);
+                var userIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(userIdClaim, out var userId))
+                {
+                    user = await UserClient.GetUserByIdAsync(userId);
+                    if (user != null)
+                    {
+                        editModel.Username = user.Username;
+                        editModel.Email = user.Email;
+                        editModel.UserRole = user.UserRole;
+                    }
+                }
+            }
+            isLoading = false;
+            hasLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateProfile()
+    {
+        if (user == null) return;
+        
+        var request = new UpdateUserRequest
+        {
+            Username = editModel.Username,
+            Email = editModel.Email,
+            UserRole = editModel.UserRole,
+            Password = string.IsNullOrWhiteSpace(editModel.Password) ? null : editModel.Password
+        };
+
+        var updated = await UserClient.UpdateUserAsync(user.Id, request);
+        if (updated != null)
+        {
+            user = updated;
+            message = "Profile updated!";
+            editModel.Password = ""; 
+        }
+        else
+        {
+            message = "Failed to update profile.";
+        }
+    }
+
+    private void ShowDeleteConfirm()
+    {
+        showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+    }
+    private async Task DeleteAccount()
+    {
+        showDeleteConfirm = false;
+        if (user == null) return;
+        var success = await UserClient.DeleteUserAsync(user.Id);
+        if (success)
+        {
+            message = "Account deleted. Redirecting...";
+            await SessionStorage.DeleteAsync("authToken");
+            showLoading = true;
+            StateHasChanged();
+            await Task.Delay(1500);
+            showLoading = false;
+            NavigationManager.NavigateTo("/", forceLoad: true);
+        }
+        else
+        {
+            message = "Failed to delete account.";
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/movies");
+    }
+}
