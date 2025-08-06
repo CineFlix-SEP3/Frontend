@@ -9,124 +9,147 @@
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
 @using Frontend.Components.Pages.Admin
 @using Frontend.Components.Pages.User
+@implements IDisposable
+
+<PageTitle>Movies</PageTitle>
 
 <link href="movieHome.css" rel="stylesheet" />
 
-<div class="home-header">
-    <h1>🎬 Movie Collection</h1>
-    <div class="header-actions">
-        @if (isAdmin)
-        {
-            <button class="add-movie-btn" @onclick="ShowAddMovie">
-                ➕ Add New Movie
-            </button>
-        }
-        <div class="menu-container">
-            <button class="menu-btn" @onclick="ToggleMenu">⋮</button>
-            @if (showMenu)
-            {
-                <div class="menu">
-                    <button @onclick="GoToProfile">👤 Profile</button>
-                    <button @onclick="Logout">🚪 Logout</button>
-                </div>
-            }
+<div class="movies-layout">
+    <!-- Navigation Header -->
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-tabs">
+                <button class="nav-tab primary @GetTabClass("list")" @onclick='() => SetActiveView("list")'>
+                    🎬 Movies
+                </button>
+                @if (!isAdmin)
+                {
+                    <button class="nav-tab @GetTabClass("favorites")" @onclick='() => SetActiveView("favorites")'>
+                        ⭐ Favorites
+                    </button>
+                    <button class="nav-tab @GetTabClass("watchlist")" @onclick='() => SetActiveView("watchlist")'>
+                        ⏰ Watchlist
+                    </button>
+                }
+                <button class="nav-tab" @onclick="GoToProfile">
+                    👤 Profile
+                </button>
+            </div>
+            <div class="header-actions">
+                @if (isAdmin)
+                {
+                    <button class="btn btn-primary" @onclick='() => SetActiveView("add")'>
+                        ➕ Add Movie
+                    </button>
+                }
+                <button class="btn btn-logout" @onclick="Logout">
+                    🚪 Logout
+                </button>
+            </div>
         </div>
-    </div>
-</div>
+    </nav>
 
-@if (currentView == "list")
-{
-    @if (movies == null)
-    {
-        <div class="loading">Loading movies...</div>
-    }
-    else if (movies.Count == 0)
-    {
-        <div class="empty-state">
-            <h3>No movies yet</h3>
-            <p>Click "Add New Movie" to get started!</p>
-        </div>
-    }
-    else
-    {
-        <div class="movie-grid">
-            @foreach (var movie in movies)
+    <!-- Main Content Area -->
+    <main class="main-content">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading movies...</p>
+            </div>
+        }
+        else
+        {
+            @switch (currentView)
             {
-                <div class="movie-card" @onclick="() => ShowMovieDetail(movie.Id)">
-                    <img class="poster" src="@movie.PosterUrl" alt="@movie.Title" />
-                    <div class="movie-info">
-                        <h3>@movie.Title</h3>
-                        <div class="stars">@RenderStars(movie.Rating)</div>
-                        <p class="genres">@string.Join(", ", movie.Genres)</p>
+                case "list":
+                    @if (movies?.Any() == true)
+                    {
+                        <div class="movie-grid">
+                            @foreach (var movie in movies)
+                            {
+                                <div class="movie-card" @onclick='() => ShowMovieDetail(movie.Id)'>
+                                    <img class="poster" src="@movie.PosterUrl" alt="@movie.Title" />
+                                    <div class="movie-info">
+                                        <h3>@movie.Title</h3>
+                                        <div class="stars">@RenderStars(movie.Rating)</div>
+                                        <div class="genres">@string.Join(", ", movie.Genres)</div>
+                                    </div>
+                                    @if (isAdmin)
+                                    {
+                                        <div class="movie-actions">
+                                            <button class="edit-btn" @onclick='(e) => EditMovie(movie.Id)'>Edit</button>
+                                            <button class="delete-btn" @onclick='(e) => DeleteMovie(movie.Id)'>Delete</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="empty-state">
+                            <h3>No movies found</h3>
+                            <p>Try adding a new movie or check back later.</p>
+                        </div>
+                    }
+                    break;
+
+                case "favorites" when !isAdmin:
+                    <Favorites />
+                    break;
+
+                case "watchlist" when !isAdmin:
+                    <WatchList />
+                    break;
+
+                case "add" when isAdmin:
+                    <MovieAddEdit OnSave="HandleMovieSaved" OnCancel='() => SetActiveView("list")' />
+                    break;
+
+                case "edit" when isAdmin && selectedMovie != null:
+                    <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="HandleEditCancel" />
+                    break;
+
+                case "detail" when selectedMovieId.HasValue:
+                    @if (isAdmin)
+                    {
+                        <AdminMovieView Id="@selectedMovieId.Value" />
+                    }
+                    else
+                    {
+                        <UserMovieView Id="@selectedMovieId.Value" />
+                    }
+                    break;
+
+                default:
+                    <div class="empty-state">
+                        <h3>Nothing to show</h3>
+                        <p>Select a tab to get started.</p>
                     </div>
-                </div>
+                    break;
             }
-        </div>
-    }
-}
-else if (currentView == "add" && isAdmin)
-{
-    <MovieAddEdit OnSave="HandleMovieSaved" OnCancel="ShowMovieList" />
-}
-else if (currentView == "edit" && isAdmin)
-{
-    <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="HandleEditCancel" />
-}
-else if (currentView == "detail" && selectedMovieId != null)
-{
-    @if (isAdmin)
-    {
-        <AdminMovieView Id="selectedMovieId.Value" />
-    }
-    else
-    {
-        <UserMovieView Id="selectedMovieId.Value" />
-    }
-}
+        }
+    </main>
+</div>
 
 @code {
     private List<MovieDto>? movies;
     private string currentView = "list";
-    private bool showMenu = false;
+    private bool isLoading = true;
     private MovieDto? selectedMovie = null;
     private int? selectedMovieId = null;
     private string? returnToDetailId;
     private bool isAdmin = false;
     private bool isInitialized = false;
-    private bool locationHandlerAttached = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !isInitialized)
+        if (firstRender)
         {
-            var result = await SessionStorage.GetAsync<string>("authToken");
-            var token = result.Success ? result.Value : null;
-
-            if (!string.IsNullOrEmpty(token))
-            {
-                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
-                var jwt = handler.ReadJwtToken(token);
-                var role = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
-                isAdmin = role?.ToUpperInvariant() == "ADMIN";
-            }
-            else
-            {
-                isAdmin = false;
-            }
-
-            await LoadMovies();
-
-            UpdateViewFromQuery();
-
-            isInitialized = true;
+            await InitializeComponent();
             StateHasChanged();
-        }
-
-        // Attach location changed handler once
-        if (!locationHandlerAttached)
-        {
-            NavigationManager.LocationChanged += HandleLocationChanged;
-            locationHandlerAttached = true;
         }
     }
 
@@ -138,104 +161,117 @@ else if (currentView == "detail" && selectedMovieId != null)
         }
     }
 
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+    }
+
+    private async Task InitializeComponent()
+    {
+        await DetermineUserRole();
+        await LoadMovies();
+        UpdateViewFromQuery();
+        NavigationManager.LocationChanged += HandleLocationChanged;
+        isInitialized = true;
+        isLoading = false;
+    }
+
+    private async Task DetermineUserRole()
+    {
+        try
+        {
+            var result = await SessionStorage.GetAsync<string>("authToken");
+            var token = result.Success ? result.Value : null;
+
+            if (!string.IsNullOrEmpty(token))
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var jwt = handler.ReadJwtToken(token);
+                var role = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role)?.Value;
+                isAdmin = string.Equals(role, "ADMIN", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch
+        {
+            isAdmin = false;
+        }
+    }
+
+    private async Task LoadMovies()
+    {
+        try
+        {
+            var movieList = await MovieClient.GetAllMoviesAsync();
+            movies = movieList?.ToList() ?? new List<MovieDto>();
+        }
+        catch
+        {
+            movies = new List<MovieDto>();
+        }
+    }
+
+    private void SetActiveView(string view)
+    {
+        currentView = view;
+        selectedMovie = null;
+        selectedMovieId = null;
+        if (view == "list")
+        {
+            var currentUri = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            if (!currentUri.Equals("movies", StringComparison.OrdinalIgnoreCase))
+            {
+                NavigationManager.NavigateTo("/movies");
+            }
+        }
+    }
+
+    private string GetTabClass(string tabView)
+    {
+        return currentView == tabView ? "active" : "";
+    }
+
     private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         if (isInitialized)
         {
-            UpdateViewFromQuery();
-            StateHasChanged();
-        }
-    }
-
-    public void Dispose()
-    {
-        if (locationHandlerAttached)
-        {
-            NavigationManager.LocationChanged -= HandleLocationChanged;
-            locationHandlerAttached = false;
+            // Only update view if still on /movies
+            var currentUri = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            if (currentUri.StartsWith("movies", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateViewFromQuery();
+                StateHasChanged();
+            }
         }
     }
 
     private void UpdateViewFromQuery()
     {
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
-        var queryParams = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
 
-        if (isAdmin && queryParams.TryGetValue("edit", out var editId))
+        if (isAdmin && queryParams.TryGetValue("edit", out var editId) && int.TryParse(editId, out var id))
         {
-            if (int.TryParse(editId, out var id))
+            var movieToEdit = movies?.FirstOrDefault(m => m.Id == id);
+            if (movieToEdit != null)
             {
-                var movieToEdit = movies?.FirstOrDefault(m => m.Id == id);
-                if (movieToEdit != null)
+                selectedMovie = movieToEdit;
+                currentView = "edit";
+                if (queryParams.TryGetValue("returnTo", out var returnPath))
                 {
-                    ShowEditMovie(movieToEdit);
-
-                    if (queryParams.TryGetValue("returnTo", out var returnPath))
-                    {
-                        returnToDetailId = returnPath;
-                    }
-                    else
-                    {
-                        returnToDetailId = null;
-                    }
-                    return;
+                    returnToDetailId = returnPath;
                 }
-            }
-        }
-        else if (isAdmin && queryParams.TryGetValue("returnTo", out var detailId))
-        {
-            if (int.TryParse(detailId, out var id))
-            {
-                ShowMovieDetail(id);
                 return;
             }
         }
-
-        ShowMovieList();
-    }
-
-    private async Task LoadMovies()
-    {
-        movies = (await MovieClient.GetAllMoviesAsync())?.ToList();
-    }
-
-    private void ToggleMenu()
-    {
-        showMenu = !showMenu;
-    }
-
-    private void ShowAddMovie()
-    {
-        if (!isAdmin) return;
-        currentView = "add";
-        selectedMovie = null;
-        showMenu = false;
-    }
-
-    private void ShowEditMovie(MovieDto movie)
-    {
-        if (!isAdmin) return;
-        selectedMovie = movie;
-        currentView = "edit";
-    }
-
-    private void ShowMovieList()
-    {
-        currentView = "list";
-        selectedMovie = null;
-        selectedMovieId = null;
-        returnToDetailId = null;
-    }
-
-    private void HandleEditCancel()
-    {
-        if (!string.IsNullOrEmpty(returnToDetailId))
+        if (isAdmin && queryParams.TryGetValue("returnTo", out var detailId) && int.TryParse(detailId, out var returnId))
         {
-            ShowMovieDetail(int.Parse(returnToDetailId));
+            ShowMovieDetail(returnId);
+            return;
         }
-        else
+        // Only set to list if not already
+        if (currentView != "list")
         {
-            ShowMovieList();
+            SetActiveView("list");
         }
     }
 
@@ -245,17 +281,56 @@ else if (currentView == "detail" && selectedMovieId != null)
         currentView = "detail";
     }
 
+    private void EditMovie(int id)
+    {
+        var uri = $"/movies?edit={id}";
+        NavigationManager.NavigateTo(uri);
+    }
+
+    private async void DeleteMovie(int id)
+    {
+        var confirmed = true; // Replace with a confirmation dialog if needed
+        if (confirmed)
+        {
+            var success = await MovieClient.DeleteMovieAsync(id);
+            if (success)
+            {
+                await LoadMovies();
+                StateHasChanged();
+            }
+        }
+    }
+
     private async Task HandleMovieSaved()
     {
         await LoadMovies();
-        if (!string.IsNullOrEmpty(returnToDetailId))
+        if (!string.IsNullOrEmpty(returnToDetailId) && int.TryParse(returnToDetailId, out var id))
         {
-            ShowMovieDetail(int.Parse(returnToDetailId));
+            ShowMovieDetail(id);
         }
         else
         {
-            ShowMovieList();
+            SetActiveView("list");
         }
+        returnToDetailId = null;
+    }
+
+    private void HandleEditCancel()
+    {
+        if (!string.IsNullOrEmpty(returnToDetailId) && int.TryParse(returnToDetailId, out var id))
+        {
+            ShowMovieDetail(id);
+        }
+        else
+        {
+            SetActiveView("list");
+        }
+        returnToDetailId = null;
+    }
+
+    private void GoToProfile()
+    {
+        NavigationManager.NavigateTo("/profile");
     }
 
     private async Task Logout()
@@ -263,25 +338,19 @@ else if (currentView == "detail" && selectedMovieId != null)
         try
         {
             await AuthService.LogoutAsync();
-            showMenu = false;
             NavigationManager.NavigateTo("/", forceLoad: true);
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error during logout: {ex.Message}");
         }
     }
 
     private MarkupString RenderStars(double rating)
     {
-        int full = (int)(rating / 2);
-        bool half = rating % 2 >= 1;
-        string stars = new string('★', full) + (half ? "½" : "") + new string('☆', 5 - full - (half ? 1 : 0));
-        return (MarkupString)$"<span>{stars}</span>";
-    }
-    private void GoToProfile()
-    {
-        NavigationManager.NavigateTo("/profile");
-        showMenu = false;
+        var fullStars = (int)(rating / 2);
+        var hasHalfStar = rating % 2 >= 1;
+        var emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+        var stars = new string('★', fullStars) + (hasHalfStar ? "½" : "") + new string('☆', emptyStars);
+        return (MarkupString)$"<span title=\"{rating}/10\">{stars}</span>";
     }
 }
