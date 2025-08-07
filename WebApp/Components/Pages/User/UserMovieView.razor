@@ -5,10 +5,12 @@
 @inject MovieClient MovieClient
 @inject ReviewClient ReviewClient
 @inject UserClient UserClient
+@inject UserLibraryClient UserLibraryClient
 @inject CustomAuthService AuthService
 @inject NavigationManager NavigationManager
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
 @inject IJSRuntime JS
+@rendermode InteractiveServer
 
 <link href="DetailedMovieView.css" rel="stylesheet"/>
 
@@ -29,7 +31,55 @@ else
             </div>
 
             <div class="movie-info">
-                <h1 class="movie-title">@movie.Title</h1>
+                <div class="movie-title-section">
+                    <h1 class="movie-title">@movie.Title</h1>
+                    @if (userId.HasValue)
+                    {
+                        <div class="movie-menu-container">
+                            <button class="movie-menu-btn" @onclick="ToggleMovieMenu" aria-label="Movie options">
+                            </button>
+                            @if (showMovieMenu)
+                            {
+                                <div class="movie-menu-dropdown">
+                                    <button class="menu-item-btn @(isFavorite ? "active" : "")"
+                                            @onclick="ToggleFavorite">
+                                        @if (isFavorite)
+                                        {
+                                            <span class="menu-icon">❤️</span>
+                                            <span>Remove from Favorites</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="menu-icon">🤍</span>
+                                            <span>Add to Favorites</span>
+                                        }
+                                    </button>
+                                    <button class="menu-item-btn @(isInWatchlist ? "active" : "")"
+                                            @onclick="ToggleWatchlist">
+                                        @if (isInWatchlist)
+                                        {
+                                            <span class="menu-icon">✅</span>
+                                            <span>Remove from Watchlist</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="menu-icon">📝</span>
+                                            <span>Add to Watchlist</span>
+                                        }
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(libraryMessage))
+                {
+                    <div class="library-message @(libraryMessageType == "success" ? "success" : "error")">
+                        @libraryMessage
+                    </div>
+                }
+
                 <div class="movie-meta">
                     <div class="stars">@((MarkupString)RenderStars(movie.Rating))</div>
                     <span class="rating-value">@movie.Rating.ToString("0.0")/10</span>
@@ -116,14 +166,15 @@ else
                                     <div class="stars">@((MarkupString)RenderStars(userReview.Rating))</div>
                                     <span class="rating-value">@userReview.Rating.ToString("0.0")</span>
                                 </div>
-                                <div class="review-actions">
-                                    <button class="review-menu-btn" @onclick="ToggleMenu" aria-label="Review options">
-                                        ⋮
-                                    </button>
+                                <div class="movie-menu-container">
+                                    <button class="movie-menu-btn" @onclick="ToggleMenu"
+                                            aria-label="Review options"></button>
                                     @if (showMenu)
                                     {
-                                        <div class="review-menu-dropdown">
-                                            <button class="menu-delete-btn" @onclick="DeleteReview">Delete Review
+                                        <div class="movie-menu-dropdown">
+                                            <button class="menu-item-btn" @onclick="DeleteReview">
+                                                <span class="menu-icon">🗑️</span>
+                                                <span>Delete Review</span>
                                             </button>
                                         </div>
                                     }
@@ -185,8 +236,28 @@ else
     private string reviewComment = "";
     private string? reviewError;
     private bool showMenu = false;
+    private bool showMovieMenu = false;
+    private bool isFavorite = false;
+    private bool isInWatchlist = false;
+    private string? libraryMessage;
+    private string libraryMessageType = "success";
+    private bool hasLoaded = false;
 
     private Dictionary<int, string> userIdToName = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !hasLoaded)
+        {
+            await LoadUserInfo();
+            await LoadMovie();
+            await LoadReviews();
+            await LoadUserNamesForReviews();
+            await LoadLibraryStatus();
+            hasLoaded = true;
+            StateHasChanged();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,6 +265,7 @@ else
         await LoadUserInfo();
         await LoadReviews();
         await LoadUserNamesForReviews();
+        await LoadLibraryStatus();
     }
 
     private async Task LoadMovie()
@@ -211,6 +283,24 @@ else
             var userIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             userName = jwt.Claims.FirstOrDefault(c => c.Type == "username")?.Value ?? "You";
             userId = int.TryParse(userIdClaim, out var uid) && uid > 0 ? uid : null;
+        }
+    }
+
+    private async Task LoadLibraryStatus()
+    {
+        if (!userId.HasValue) return;
+
+        try
+        {
+            var favorites = await UserLibraryClient.GetFavoritesAsync();
+            var watchlist = await UserLibraryClient.GetWatchListAsync();
+
+            isFavorite = favorites?.Contains(Id) ?? false;
+            isInWatchlist = watchlist?.Contains(Id) ?? false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading library status: {ex.Message}");
         }
     }
 
@@ -245,6 +335,7 @@ else
                 }
             }
         }
+
         StateHasChanged();
     }
 
@@ -253,6 +344,110 @@ else
         if (userIdToName.TryGetValue(userId, out var name))
             return name;
         return $"User {userId}";
+    }
+
+    private async Task ToggleFavorite()
+    {
+        showMovieMenu = false;
+        if (!userId.HasValue) return;
+
+        try
+        {
+            bool success;
+            if (isFavorite)
+            {
+                success = await UserLibraryClient.RemoveFavoriteAsync(Id);
+                if (success)
+                {
+                    isFavorite = false;
+                    ShowLibraryMessage("Removed from favorites", "success");
+                }
+                else
+                {
+                    ShowLibraryMessage("Failed to remove from favorites", "error");
+                }
+            }
+            else
+            {
+                success = await UserLibraryClient.AddFavoriteAsync(Id);
+                if (success)
+                {
+                    isFavorite = true;
+                    ShowLibraryMessage("Added to favorites", "success");
+                }
+                else
+                {
+                    ShowLibraryMessage("Failed to add to favorites", "error");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowLibraryMessage($"Error: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ToggleWatchlist()
+    {
+        showMovieMenu = false;
+        if (!userId.HasValue) return;
+
+        try
+        {
+            bool success;
+            if (isInWatchlist)
+            {
+                success = await UserLibraryClient.RemoveWatchListAsync(Id);
+                if (success)
+                {
+                    isInWatchlist = false;
+                    ShowLibraryMessage("Removed from watchlist", "success");
+                }
+                else
+                {
+                    ShowLibraryMessage("Failed to remove from watchlist", "error");
+                }
+            }
+            else
+            {
+                success = await UserLibraryClient.AddWatchListAsync(Id);
+                if (success)
+                {
+                    isInWatchlist = true;
+                    ShowLibraryMessage("Added to watchlist", "success");
+                }
+                else
+                {
+                    ShowLibraryMessage("Failed to add to watchlist", "error");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowLibraryMessage($"Error: {ex.Message}", "error");
+        }
+    }
+
+    private void ShowLibraryMessage(string message, string type)
+    {
+        libraryMessage = message;
+        libraryMessageType = type;
+        StateHasChanged();
+
+        // Clear message after 3 seconds
+        _ = Task.Delay(3000).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                libraryMessage = null;
+                StateHasChanged();
+            });
+        });
+    }
+
+    private void ToggleMovieMenu()
+    {
+        showMovieMenu = !showMovieMenu;
     }
 
     private async Task SubmitReview()
@@ -323,7 +518,7 @@ else
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo("/movies");
+        NavigationManager.NavigateTo("javascript:history.back()");
     }
 
     private string RenderStars(double rating)
@@ -361,4 +556,5 @@ else
             }
         }
     }
+
 }

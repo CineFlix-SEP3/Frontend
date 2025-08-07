@@ -7,13 +7,15 @@
 @inject CustomAuthService AuthService
 @inject NavigationManager NavigationManager
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
+@inject IJSRuntime JS
 @using Frontend.Components.Pages.Admin
 @using Frontend.Components.Pages.User
+@using Frontend.Components.Pages
 @implements IDisposable
 
 <PageTitle>Movies</PageTitle>
 
-<link href="movieHome.css" rel="stylesheet" />
+<link href="movieHome.css" rel="stylesheet"/>
 
 <div class="movies-layout">
     <!-- Navigation Header -->
@@ -32,7 +34,7 @@
                         ⏰ Watchlist
                     </button>
                 }
-                <button class="nav-tab" @onclick="GoToProfile">
+                <button class="nav-tab @GetTabClass("profile")" @onclick='() => SetActiveView("profile")'>
                     👤 Profile
                 </button>
             </div>
@@ -64,13 +66,13 @@
             @switch (currentView)
             {
                 case "list":
-                    @if (movies?.Any() == true)
-                    {
-                        <div class="movie-grid">
+                    <div class="movie-grid">
+                        @if (movies != null && movies.Any())
+                        {
                             @foreach (var movie in movies)
                             {
-                                <div class="movie-card" @onclick='() => ShowMovieDetail(movie.Id)'>
-                                    <img class="poster" src="@movie.PosterUrl" alt="@movie.Title" />
+                                <div class="movie-card" @onclick="() => ShowMovieDetail(movie.Id)">
+                                    <img class="poster" src="@movie.PosterUrl" alt="@movie.Title"/>
                                     <div class="movie-info">
                                         <h3>@movie.Title</h3>
                                         <div class="stars">@RenderStars(movie.Rating)</div>
@@ -79,54 +81,61 @@
                                     @if (isAdmin)
                                     {
                                         <div class="movie-actions">
-                                            <button class="edit-btn" @onclick='(e) => EditMovie(movie.Id)'>Edit</button>
-                                            <button class="delete-btn" @onclick='(e) => DeleteMovie(movie.Id)'>Delete</button>
+                                            <button class="edit-btn" @onclick:stopPropagation="true"
+                                                    @onclick="() => EditMovie(movie.Id)">Edit
+                                            </button>
+                                            <button class="delete-btn" @onclick:stopPropagation="true"
+                                                    @onclick="() => DeleteMovie(movie.Id)">Delete
+                                            </button>
                                         </div>
                                     }
                                 </div>
                             }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="empty-state">
-                            <h3>No movies found</h3>
-                            <p>Try adding a new movie or check back later.</p>
-                        </div>
-                    }
+                        }
+                        else
+                        {
+                            <div class="empty-state">
+                                <h3>No movies found.</h3>
+                            </div>
+                        }
+                    </div>
                     break;
 
                 case "favorites" when !isAdmin:
-                    <Favorites />
+                    <Favorites OnMovieSelected="ShowMovieDetail"/>
                     break;
 
                 case "watchlist" when !isAdmin:
-                    <WatchList />
+                    <WatchList OnMovieSelected="ShowMovieDetail"/>
                     break;
 
                 case "add" when isAdmin:
-                    <MovieAddEdit OnSave="HandleMovieSaved" OnCancel='() => SetActiveView("list")' />
+                    <MovieAddEdit OnSave="HandleMovieSaved" OnCancel='() => SetActiveView("list")'/>
                     break;
 
                 case "edit" when isAdmin && selectedMovie != null:
-                    <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="HandleEditCancel" />
+                    <MovieAddEdit Movie="selectedMovie" OnSave="HandleMovieSaved" OnCancel="HandleEditCancel"/>
                     break;
 
                 case "detail" when selectedMovieId.HasValue:
                     @if (isAdmin)
                     {
-                        <AdminMovieView Id="@selectedMovieId.Value" />
+                        <AdminMovieView Id="@selectedMovieId.Value"/>
                     }
                     else
                     {
-                        <UserMovieView Id="@selectedMovieId.Value" />
+                        <UserMovieView Id="@selectedMovieId.Value"/>
                     }
+
+                    break;
+
+                case "profile":
+                    <Profile/>
                     break;
 
                 default:
                     <div class="empty-state">
-                        <h3>Nothing to show</h3>
-                        <p>Select a tab to get started.</p>
+                        <h3>No content available.</h3>
                     </div>
                     break;
             }
@@ -234,7 +243,6 @@
     {
         if (isInitialized)
         {
-            // Only update view if still on /movies
             var currentUri = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
             if (currentUri.StartsWith("movies", StringComparison.OrdinalIgnoreCase))
             {
@@ -260,15 +268,17 @@
                 {
                     returnToDetailId = returnPath;
                 }
+
                 return;
             }
         }
+
         if (isAdmin && queryParams.TryGetValue("returnTo", out var detailId) && int.TryParse(detailId, out var returnId))
         {
             ShowMovieDetail(returnId);
             return;
         }
-        // Only set to list if not already
+
         if (currentView != "list")
         {
             SetActiveView("list");
@@ -312,6 +322,7 @@
         {
             SetActiveView("list");
         }
+
         returnToDetailId = null;
     }
 
@@ -325,12 +336,8 @@
         {
             SetActiveView("list");
         }
-        returnToDetailId = null;
-    }
 
-    private void GoToProfile()
-    {
-        NavigationManager.NavigateTo("/profile");
+        returnToDetailId = null;
     }
 
     private async Task Logout()
@@ -353,4 +360,5 @@
         var stars = new string('★', fullStars) + (hasHalfStar ? "½" : "") + new string('☆', emptyStars);
         return (MarkupString)$"<span title=\"{rating}/10\">{stars}</span>";
     }
+
 }

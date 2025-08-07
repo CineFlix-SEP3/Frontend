@@ -1,13 +1,11 @@
-@page "/profile"
 @using Frontend.DTOs
 @using Frontend.Services
 @rendermode InteractiveServer
 @inject UserClient UserClient
 @inject Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage.ProtectedSessionStorage SessionStorage
-@inject NavigationManager NavigationManager
 
-<link href="profile.css" rel="stylesheet" />
-<link href="movieAddEdit.css" rel="stylesheet" />
+<link href="profile.css" rel="stylesheet"/>
+<link href="movieAddEdit.css" rel="stylesheet"/>
 
 <div class="profile-container">
     @if (showLoading)
@@ -28,7 +26,6 @@
     else
     {
         <div class="profile-card">
-            <button class="back-btn" @onclick="GoBack">← Back</button>
             <h2>Profile</h2>
             <div class="profile-info">
                 <p><strong>Email:</strong> @user.Email</p>
@@ -110,7 +107,7 @@
     private async Task UpdateProfile()
     {
         if (user == null) return;
-        
+
         var request = new UpdateUserRequest
         {
             Username = editModel.Username,
@@ -124,7 +121,7 @@
         {
             user = updated;
             message = "Profile updated!";
-            editModel.Password = ""; 
+            editModel.Password = "";
         }
         else
         {
@@ -141,6 +138,7 @@
     {
         showDeleteConfirm = false;
     }
+
     private async Task DeleteAccount()
     {
         showDeleteConfirm = false;
@@ -148,22 +146,16 @@
         var success = await UserClient.DeleteUserAsync(user.Id);
         if (success)
         {
-            message = "Account deleted. Redirecting...";
-            await SessionStorage.DeleteAsync("authToken");
+            message = "Account deleted. Please reload the page.";
             showLoading = true;
             StateHasChanged();
+            await SessionStorage.DeleteAsync("authToken");
             await Task.Delay(1500);
             showLoading = false;
-            NavigationManager.NavigateTo("/", forceLoad: true);
         }
         else
         {
             message = "Failed to delete account.";
         }
-    }
-
-    private void GoBack()
-    {
-        NavigationManager.NavigateTo("/movies");
     }
 }

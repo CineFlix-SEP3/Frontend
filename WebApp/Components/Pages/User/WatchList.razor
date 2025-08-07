@@ -1,0 +1,67 @@
+@using Frontend.DTOs.Movie
+@inject Frontend.Services.UserLibraryClient UserLibraryClient
+@inject Frontend.Services.MovieClient MovieClient
+@rendermode InteractiveServer
+
+<link rel="stylesheet" href="movieHome.css" />
+
+@if (loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading movies...</p>
+    </div>
+}
+else if (watchListMovies.Count == 0)
+{
+    <div class="empty-state">
+        <h3>No movies found.</h3>
+    </div>
+}
+else
+{
+    <div class="movie-grid">
+        @foreach (var movie in watchListMovies)
+        {
+            <div class="movie-card" @onclick="@(() => OnMovieSelected.InvokeAsync(movie.Id))">
+                <img class="poster" src="@movie.PosterUrl" alt="@movie.Title"/>
+                <div class="movie-info">
+                    <h3>@movie.Title</h3>
+                    <div class="stars">@RenderStars(movie.Rating)</div>
+                    <div class="genres">@string.Join(", ", movie.Genres)</div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback<int> OnMovieSelected { get; set; }
+
+    private List<MovieDto> watchListMovies = new();
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ids = await UserLibraryClient.GetWatchListAsync();
+        if (ids != null)
+        {
+            foreach (var id in ids)
+            {
+                var movie = await MovieClient.GetMovieByIdAsync(id);
+                if (movie != null)
+                    watchListMovies.Add(movie);
+            }
+        }
+        loading = false;
+    }
+
+    private MarkupString RenderStars(double rating)
+    {
+        var fullStars = (int)(rating / 2);
+        var hasHalfStar = rating % 2 >= 1;
+        var emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+        var stars = new string('★', fullStars) + (hasHalfStar ? "½" : "") + new string('☆', emptyStars);
+        return (MarkupString)$"<span title=\"{rating}/10\">{stars}</span>";
+    }
+}
